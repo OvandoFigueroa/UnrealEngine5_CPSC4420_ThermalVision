@@ -1,0 +1,16 @@
+Object,ThermalType,Heat (0-6),Approx Surface Temp,Actor(s) in CameraTest1,Why
+Open flame / campfire,Fire,6,>300 C,TT_Fire_Flame,Hottest thing in any disaster scene - should saturate to full white
+Burning logs / embers,Fire,5,60-150 C+,TT_Fire_Log0-2,Glowing fuel under the flame; slightly below the flame itself
+Running engine / car hood,Vehicle,5,60-120 C,TT_Vehicle_Car_Hood_Engine,Engine heat soaks into the hood - the classic bright spot on a car in thermal
+Exhaust pipe,Vehicle,5,60-150 C,TT_Vehicle_Car_Exhaust,Hot exhaust gases
+Human (standing survivor),Human,4,32-37 C,TT_Human_Standing_*,Body heat - the main search-and-rescue target; should clearly stand out
+Human (trapped under debris),Human,4,32-37 C,TT_Human_Trapped_Body / _Head,Same body heat; tests a partly hidden survivor
+Animal (dog),Animal,3,28-32 C,TT_Animal_Dog_*,Warm-blooded but fur insulates so the surface reads a bit cooler than a person
+Vehicle body / cabin,Vehicle,3,30-40 C,TT_Vehicle_Car_Body / _Cabin,Warm metal from the engine and sun; cooler than the hood
+Tires,Vehicle,3,35-45 C,TT_Vehicle_Car_Tire0-3,Warm from friction after driving
+Building / wall,Building,2,22-30 C,TT_Building_Wall_*,Concrete holds daytime heat - a bit warmer than the ground
+Ground / dirt landscape,Ground,1,15-22 C,Landscape (Floor too if present),Ambient background
+Rubble / debris,Debris,1,15-22 C,TT_Human_Trapped_Debris0-4,Same as ground - ambient
+Flood water,Water,0,<15 C,TT_Water_Puddle_Water,Water stays cold and cools by evaporation - darkest object
+Cold metal barrel (shade),ColdObject,0,<15 C,TT_Cold_MetalBarrel_Barrel,Required cold/background test object
+Sky,Background,0,very cold,(no actor - background),Clear sky reads as the coldest thing in thermal
