@@ -69,3 +69,14 @@ CachedAssetRegistry*.bin
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---------------------------------------------------------------
+# Prebuilt project plugins (ThermoForge + ThermalSensor) are committed
+# so teammates can open the project without Visual Studio.
+# ---------------------------------------------------------------
+!ThermalCameraTest/Plugins/*/Binaries/
+!ThermalCameraTest/Plugins/*/Binaries/**
+ThermalCameraTest/Plugins/*/Binaries/**/*.pdb
+
+# Old build files set aside during rebuilds (safe to delete)
+_to_delete/

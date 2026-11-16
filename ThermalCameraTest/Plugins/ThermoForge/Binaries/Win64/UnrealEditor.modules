@@ -1,0 +1,8 @@
+{
+	"BuildId": "55116800",
+	"Modules": 
+	{
+		"ThermoForge": "UnrealEditor-ThermoForge.dll",
+		"ThermoForgeEditor": "UnrealEditor-ThermoForgeEditor.dll"
+	}
+}

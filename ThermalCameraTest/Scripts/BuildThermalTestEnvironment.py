@@ -172,6 +172,31 @@ class ThermalObject:
         self.actors.append((actor, heat))
         return actor
 
+    def hotspot(self, name, local, intensity, radius, exponent=1.5, attach_to=None,
+                start_full=True, warm_up=4.0, cool_down=25.0):
+        """Localized heat drawn per pixel (needs the ThermalSensor plugin)."""
+        if not hasattr(unreal, "ThermalHotSpot"):
+            unreal.log_warning("[ThermalTest] ThermalSensor plugin not compiled - skipped hot spot %s" % name)
+            return None
+        actor = eas.spawn_actor_from_class(unreal.ThermalHotSpot, self._to_world(*local),
+                                           unreal.Rotator(roll=0, pitch=0, yaw=self.yaw))
+        actor.set_actor_label("TT_%s_%s" % (self.label, name))
+        actor.set_folder_path(unreal.Name("%s/%s" % (FOLDER, self.label)))
+        actor.set_editor_property("tags", [unreal.Name("ThermalTest"), unreal.Name("HotSpot")])
+        hs = actor.get_editor_property("hot_spot")
+        hs.set_editor_property("intensity_celsius", float(intensity))
+        hs.set_editor_property("radius_cm", float(radius))
+        hs.set_editor_property("falloff_exponent", float(exponent))
+        hs.set_editor_property("start_at_full_heat", bool(start_full))
+        hs.set_editor_property("warm_up_seconds", float(warm_up))
+        hs.set_editor_property("cool_down_seconds", float(cool_down))
+        parent = attach_to or self.root
+        if parent:
+            actor.attach_to_actor(parent, unreal.Name(""), unreal.AttachmentRule.KEEP_WORLD,
+                                  unreal.AttachmentRule.KEEP_WORLD, unreal.AttachmentRule.KEEP_WORLD, False)
+        self.actors.append((actor, intensity))
+        return actor
+
     def label_text(self, height):
         if not ADD_LABELS:
             return
@@ -242,9 +267,10 @@ def build(frame):
     objects = []
 
     # 1. Standing survivor - HUMAN (heat 4)
+    # Clothing insulates (heat 3); exposed skin - face, arms - is warmest (heat 4).
     o = ThermalObject(frame, "Human_Standing", "Human", 4, fwd=750, right=-250)
-    o.part("Torso", CYLINDER, (0.45, 0.35, 0.75), local=(0, 0, 122), color="Jacket")
-    o.part("Legs", CYLINDER, (0.40, 0.30, 0.85), local=(0, 0, 42), color="Jacket")
+    o.part("Torso", CYLINDER, (0.45, 0.35, 0.75), local=(0, 0, 122), color="Jacket", heat=3)
+    o.part("Legs", CYLINDER, (0.40, 0.30, 0.85), local=(0, 0, 42), color="Jacket", heat=3)
     o.part("Head", SPHERE, (0.25, 0.25, 0.28), local=(0, 0, 175), color="Skin")
     o.part("ArmL", CYLINDER, (0.12, 0.12, 0.65), local=(0, -30, 118), color="Skin")
     o.part("ArmR", CYLINDER, (0.12, 0.12, 0.65), local=(0, 30, 118), color="Skin")
@@ -253,7 +279,7 @@ def build(frame):
 
     # 2. Trapped survivor half-buried by debris - HUMAN (4) + DEBRIS (1)
     o = ThermalObject(frame, "Human_Trapped", "Human", 4, fwd=1150, right=-180, yaw_offset=-90)
-    o.part("Body", CYLINDER, (0.45, 0.35, 1.30), local=(0, 0, 20), rot=(0, 90, 0), color="Jacket")
+    o.part("Body", CYLINDER, (0.45, 0.35, 1.30), local=(0, 0, 20), rot=(0, 90, 0), color="Jacket", heat=3)
     o.part("Head", SPHERE, (0.25, 0.25, 0.25), local=(78, 0, 18), color="Skin")
     debris = [((-40, -25, 30), (25, 10, 15), (1.1, 0.8, 0.6)),
               ((-15, 30, 35), (-10, 30, 40), (0.9, 1.0, 0.7)),
@@ -278,12 +304,31 @@ def build(frame):
     # 4. Car with a hot engine - VEHICLE (body 3, hood 5, tires 3)
     o = ThermalObject(frame, "Vehicle_Car", "Vehicle", 3, fwd=1000, right=-650, yaw_offset=90)
     o.part("Body", CUBE, (3.0, 1.8, 0.9), local=(-60, 0, 75), color="CarBody")
-    o.part("Hood_Engine", CUBE, (1.2, 1.8, 0.8), local=(150, 0, 70), color="CarHood", heat=5)
+    hood = o.part("Hood_Engine", CUBE, (1.2, 1.8, 0.8), local=(150, 0, 70), color="CarHood", heat=3)
     o.part("Cabin", CUBE, (2.0, 1.6, 0.7), local=(-60, 0, 155), color="CarBody")
     for i, (lx, ly) in enumerate(((140, -95), (140, 95), (-140, -95), (-140, 95))):
         o.part("Tire%d" % i, CYLINDER, (0.65, 0.65, 0.25), local=(lx, ly, 32), rot=(90, 0, 0), color="Tire")
-    o.part("Exhaust", CYLINDER, (0.08, 0.08, 0.30), local=(-215, 60, 30), rot=(0, 90, 0), color="Steel", heat=5)
+    pipe = o.part("Exhaust", CYLINDER, (0.08, 0.08, 0.30), local=(-215, 60, 30), rot=(0, 90, 0), color="Steel", heat=3)
+    # Engine heat is strongest over the engine block and fades across the hood and into the body;
+    # the exhaust is hottest at the tip.
+    o.hotspot("EngineHeat", local=(160, 0, 100), intensity=65, radius=140, exponent=1.2, attach_to=hood)
+    o.hotspot("ExhaustHeat", local=(-232, 60, 30), intensity=80, radius=45, exponent=1.5, attach_to=pipe)
     o.label_text(230)
+    objects.append(o)
+
+    # 4b. Survivor holding a stick - contact heat: warm at the grip, cold at both ends.
+    # The grip warms up over a few seconds after Play (bStartAtFullHeat off) like real conduction.
+    o = ThermalObject(frame, "Human_HoldingStick", "Human", 4, fwd=820, right=-470)
+    o.part("Torso", CYLINDER, (0.45, 0.35, 0.75), local=(0, 0, 122), color="Jacket", heat=3)
+    o.part("Legs", CYLINDER, (0.40, 0.30, 0.85), local=(0, 0, 42), color="Jacket", heat=3)
+    o.part("Head", SPHERE, (0.25, 0.25, 0.28), local=(0, 0, 175), color="Skin")
+    o.part("ArmL", CYLINDER, (0.12, 0.12, 0.65), local=(0, -30, 118), color="Skin")
+    o.part("ArmR", CYLINDER, (0.12, 0.12, 0.65), local=(0, 30, 118), color="Skin")
+    o.part("HandR", SPHERE, (0.11, 0.11, 0.13), local=(-8, 30, 82), color="Skin")
+    stick_part = o.part("Stick", CYLINDER, (0.05, 0.05, 1.40), local=(-14, 30, 82), color="Log", heat=1)
+    o.hotspot("GripHeat", local=(-14, 30, 82), intensity=12, radius=32, exponent=1.3,
+              attach_to=stick_part, start_full=False, warm_up=5.0, cool_down=30.0)
+    o.label_text(215)
     objects.append(o)
 
     # 5. Campfire / burning debris - FIRE (flame 6, logs 5)

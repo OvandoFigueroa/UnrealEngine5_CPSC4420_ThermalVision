@@ -14,11 +14,12 @@ The test level is `Content/CameraTest1.umap`. It has one example object for each
 
 | Object | Type | Heat (0-6) | Actor label(s) |
 |---|---|---|---|
-| Standing survivor | Human | 4 | `TT_Human_Standing_*` |
-| Survivor trapped under debris | Human (debris = 1) | 4 | `TT_Human_Trapped_*` |
+| Standing survivor | Human | 4 skin / 3 clothing | `TT_Human_Standing_*` |
+| Survivor trapped under debris | Human (debris = 1) | 4 skin / 3 clothing | `TT_Human_Trapped_*` |
+| Survivor holding a stick | Human + contact heat | 4 / 3, stick 1 + grip hot spot | `TT_Human_HoldingStick_*` |
 | Dog | Animal | 3 | `TT_Animal_Dog_*` |
 | Car: body / cabin / tires | Vehicle | 3 | `TT_Vehicle_Car_Body`, `_Cabin`, `_Tire0-3` |
-| Car: hood over engine, exhaust | Vehicle | 5 | `TT_Vehicle_Car_Hood_Engine`, `_Exhaust` |
+| Car: engine and exhaust | Vehicle | hot spots (+65 C, +80 C) fading across the hood | `TT_Vehicle_Car_EngineHeat`, `_ExhaustHeat` |
 | Campfire: flame | Fire | 6 | `TT_Fire_Flame` |
 | Campfire: burning logs | Fire | 5 | `TT_Fire_Log0-2` |
 | Damaged building wall | Building | 2 | `TT_Building_Wall_*` |
@@ -69,3 +70,36 @@ Running the script deletes its previous objects and rebuilds them around whereve
 - Objects are built from engine basic shapes as placeholders. Team 5's thermal actors (human, animal, vehicle, fire, building, ground) can replace them while keeping the same heat values.
 - Heat is one value per part. There is no gradient across a surface (for example, a warmer face than clothing) and no cooling over time.
 - Next steps: swap in Team 5's actors, capture paired RGB/thermal images of every case for the deliverables, and add a second scene at night, where the ground cools and the contrast changes.
+
+## Thermal camera (ThermoForge + ThermalSensor plugins)
+
+The project uses two plugins in `ThermalCameraTest/Plugins`:
+
+- **ThermoForge** (MIT, by Cem Akkaya) provides heat sources, ambient climate (time of day, season, weather) and temperature queries. It also has an experimental probe-based heat-field view. One change from upstream: `MaxProbes` and `ProbeRadiusCm` are exposed to Blueprints.
+- **ThermalSensor** (ours) turns ThermoForge temperatures into a thermal camera image:
+  - **Thermal Sensor** component: attach it to any actor (drone, rover, stationary camera). It drives the actor's `Thermal_Capture`/`RGB_Capture`, or creates its own pair so both images come from the same position. Display modes are White Hot, Black Hot, Ironbow and the ThermoForge field view. Call `SaveImagePair` to export matching RGB/thermal PNGs.
+  - **Thermal Body** component: gives an actor a ThermoForge heat source from the 0-6 heat scale. Every actor tagged `Heat_N` gets one automatically at Play.
+  - **Thermal Hot Spot** component / `AThermalHotSpot` actor: localized heat that is evaluated per pixel and fades with distance (see below).
+  - `BP_Thermal_Human/Animal/Vehicle/Fire/Building/Ground` in `Content/ThermalSensor/Actors`: the six ready-made thermal actor types.
+
+### How a pixel gets its temperature
+
+1. **Base temperature of the surface.** ThermoForge computes ambient air, solar gain and box heat sources at the object. The sensor writes this into Custom Depth Stencil. Untagged geometry reads as ambient, and the open sky reads cold.
+2. **Localized heat, per pixel.** Hot spots, heat prints and ThermoForge point sources (fire) are uploaded to the shader. Each pixel is pulled toward `ambient + intensity x falloff(distance)` and never hotter than the source itself. This gives gradients:
+   - a stick is warm where it is held and cold at both ends
+   - a car hood is hottest over the engine and fades into the body
+   - the ground around a fire is warm
+3. **Heat builds up and fades over time.** A hot spot warms over `WarmUpSeconds` while heating and cools over `CoolDownSeconds` after `SetHeating(false)` (Newton's law of cooling). `ThermalSensorSubsystem -> AddHeatPrint` leaves a fading print where something warm touched a surface, such as a hand letting go of a stick or touching a wall.
+4. **Temperature to image.** The range is ambient -15 C to ambient +75 C with gamma 0.5, plus slight surface shading and sensor noise. The palette is white-hot, black-hot or ironbow.
+
+**Making something hold heat in one place:** add a `Thermal Hot Spot` component (or attach a `ThermalHotSpot` actor) where the contact or heat is, for example on a character's hand socket or at the grip of a held object. Set its intensity (skin contact about +12 C, engine about +65 C), its radius and its falloff exponent.
+
+### Tuning the image
+
+- Run `Scripts/TuneThermalSensor.py` to set the display range on `BP_ThermalCamera`'s Thermal Sensor. The defaults are ambient -8 C to ambient +28 C with gamma 0.85, so skin is bright and engines and fire saturate, like a real camera's auto-gain. You can also edit the values in the component's Details panel.
+- Ambient air temperature comes from ThermoForge's climate settings (**Project Settings > Thermo Forge**). It is currently a summer noon at about 31.5 C, and the time of day, season and weather can be changed on the Thermal Sensor.
+- The on-screen preview is calibrated for the editor display. Images saved with `SaveImagePair` (in `Saved/ThermalCaptures`) come out darker, but they keep the same contrast.
+
+### Setup after cloning
+
+The plugin binaries are committed, so the project opens without Visual Studio. To rebuild after changing C++, you need VS Build Tools 2022 with the C++ workload and the .NET Framework 4.8.1 SDK. The materials, actor Blueprints and camera component are created by `Scripts/SetupThermoForge.py`, which is safe to re-run.

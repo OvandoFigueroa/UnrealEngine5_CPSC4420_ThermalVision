@@ -32,6 +32,18 @@
 			"TargetAllowList": [
 				"Editor"
 			]
+		},
+		{
+			"Name": "PCG",
+			"Enabled": true
+		},
+		{
+			"Name": "ThermoForge",
+			"Enabled": true
+		},
+		{
+			"Name": "ThermalSensor",
+			"Enabled": true
 		}
 	]
 }
